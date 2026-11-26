@@ -1,0 +1,9 @@
+{
+  "name": "csv-lens",
+  "version": "0.1.0",
+  "description": "零依赖 CSV 分析器:RFC4180 解析(引号/多行字段/流式)、类型推断、列统计,CLI 摘要 + Web 表格预览",
+  "type": "module",
+  "scripts": { "test": "node test/parse.test.mjs && node test/infer.test.mjs && node test/server.test.mjs && node test/syntax.test.mjs" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}

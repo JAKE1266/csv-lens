@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>csv-lens</title>
+  <style>
+    :root{
+      --bg:#0a0b0f; --bg2:#12141a; --card:#151821; --card2:#1b1f2a;
+      --line:#252a36; --line2:#323847;
+      --fg:#e8eaf0; --dim:#8b93a7; --dimmer:#5d6478;
+      --accent:#6366f1; --ok:#22c55e; --err:#ef4444; --warn:#f59e0b;
+      --r:14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+    header{border-bottom:1px solid var(--line);padding:14px 24px;display:flex;gap:12px;align-items:center}
+    .logo{font-size:16px;font-weight:700}
+    .sub{font-size:12px;color:var(--dimmer)}
+    .layout{max-width:1300px;margin:0 auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+    .card-h{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dimmer);margin-bottom:10px}
+    textarea{width:100%;min-height:170px;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px;font:12.5px/1.6 ui-monospace,monospace;resize:vertical}
+    textarea:focus{outline:none;border-color:var(--accent)}
+    .bar{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+    input,select{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    input.d{width:70px;font-family:ui-monospace,monospace}
+    button{font:inherit;font-weight:600;cursor:pointer;border:0;border-radius:8px;padding:9px 18px;background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff}
+    .errbox{background:rgba(239,68,68,.12);border:1px solid var(--err);border-radius:9px;padding:10px 14px;color:var(--err);font-size:13px;display:none}
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+    .col{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+    .col .n{font-weight:700;font-size:13px;display:flex;justify-content:space-between}
+    .col .t{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+    .t.number{color:var(--ok)} .t.date{color:var(--accent)} .t.boolean{color:var(--warn)} .t.string{color:var(--dim)} .t.empty{color:var(--dimmer)}
+    .col .m{font-size:11px;color:var(--dim);margin-top:4px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    th{background:var(--bg2);color:var(--dim);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);position:sticky;top:0}
+    td{padding:6px 10px;border-bottom:1px solid var(--line);word-break:break-all;font-family:ui-monospace,monospace;font-size:12px}
+    .wrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+    .warn{font-size:11.5px;color:var(--warn);margin-top:6px}
+    .empty{color:var(--dimmer);padding:24px;text-align:center}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">📊 csv-lens</div>
+    <span class="sub">零依赖 CSV 分析器 · 全部在本地完成</span>
+  </header>
+
+  <div class="layout">
+    <div class="card">
+      <div class="card-h">CSV 内容(粘贴,不落盘)</div>
+      <textarea id="content">id,name,active,joined,score
+1,Alice,true,2026-01-15,95
+2,Bob,false,2026-02-20,87
+3,Carol,true,2026-03-05,
+,Dave,true,2026-04-10,72</textarea>
+      <div class="bar">
+        <select id="delim">
+          <option value=",">逗号 ,</option>
+          <option value=";">分号 ;</option>
+          <option value="\t">制表符 \t</option>
+        </select>
+        <input class="d" id="previewRows" type="number" value="10" min="1" title="预览行数">
+        <button id="goBtn">分析</button>
+        <span id="warn" class="warn"></span>
+      </div>
+    </div>
+
+    <div class="card" id="statCard" style="display:none">
+      <div class="card-h">列概览</div>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card" id="tableCard" style="display:none">
+      <div class="card-h" id="tableHead"></div>
+      <div class="wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+    </div>
+
+    <div class="errbox" id="err"></div>
+  </div>
+
+  <script>
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+    const $ = (id) => document.getElementById(id)
+
+    async function run() {
+      const err = $('err')
+      err.style.display = 'none'
+      try {
+        const delimSel = $('delim').value
+        const res = await fetch('/api/profile', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: $('content').value,
+            delimiter: delimSel === '\\t' ? '\\t' : delimSel,
+            previewRows: Number($('previewRows').value) || 10,
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`)
+        $('warn').textContent = d.warnings?.length ? `⚠ ${d.warnings.length} 条解析警告` : ''
+        $('statCard').style.display = d.columns.length ? 'block' : 'none'
+        $('tableCard').style.display = d.records.length ? 'block' : 'none'
+        $('stats').innerHTML = d.columns.map((c) => `
+          <div class="col">
+            <div class="n">${esc(c.name)}<span class="t ${c.type}">${c.type}</span></div>
+            <div class="m">唯一 ${c.unique} · 缺失 ${c.missing}</div>
+            ${c.type === 'number' ? `<div class="m">min ${c.min ?? '—'} · max ${c.max ?? '—'} · Σ ${c.sum ?? '—'}</div>` : ''}
+            ${c.type === 'date' ? `<div class="m">${c.min ?? ''} → ${c.max ?? ''}</div>` : ''}
+            ${c.type === 'boolean' ? `<div class="m">true ×${c.true ?? 0} · false ×${c.false ?? 0}</div>` : ''}
+          </div>`).join('')
+        $('thead').innerHTML = `<tr>${d.columns.map((c) => `<th>${esc(c.name)}</th>`).join('')}</tr>`
+        $('tbody').innerHTML = d.records.map((r) => `<tr>${d.columns.map((c) => `<td>${esc(r[c.name] ?? '')}</td>`).join('')}</tr>`).join('')
+        $('tableHead').textContent = `表格预览(共 ${d.rowCount} 行数据,预览 ${d.records.length} 行)`
+      } catch (e) {
+        err.textContent = e.message
+        err.style.display = 'block'
+      }
+    }
+    $('goBtn').addEventListener('click', run)
+    run()
+  </script>
+</body>
+</html>
