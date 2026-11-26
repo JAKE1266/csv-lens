@@ -1,5 +1,9 @@
 # csv-lens
 
+[![CI](https://github.com/JAKE1266/csv-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/JAKE1266/csv-lens/actions/workflows/ci.yml)
+
+> 源码：<https://github.com/JAKE1266/csv-lens> · 安装：`npm i github:JAKE1266/csv-lens`（或直接克隆运行）
+
 零依赖 **CSV 分析器**:RFC4180 解析(引号内逗号/换行、`""` 转义、多行字段,**流式分块可用**)、列类型推断(数字/日期/布尔)、每列统计(缺失/唯一/min-max/样本)。CLI 摘要与本地 Web 表格预览双入口。纯 Node.js(≥18)。
 
 > Web UI 只接受**粘贴的文本**,不提供任意文件路径读取——本地文件场景走 CLI。
